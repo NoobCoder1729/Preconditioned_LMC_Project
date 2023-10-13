@@ -1,0 +1,244 @@
+####Journey Code###########################
+import math
+import random
+
+import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib
+
+##initializing dimension
+p=9
+n_iter_1=15
+data_mat=np.zeros((p,n_iter_1))
+
+##fixing seed
+random.seed(10)
+np.random.seed(10)
+
+###Data matrix
+for i in range(n_iter_1):
+    if (random.uniform(0,1)<1/3):
+        data_mat[0,i]=1
+        data_mat[1,i]=1
+        data_mat[2,i]=1
+    else:
+        if ((random.uniform(0,1)<2/3)&(random.uniform(0,1)>1/3)):
+            data_mat[3, i] = 1
+            data_mat[4, i] = 1
+            data_mat[5, i] = 1
+        else:
+            data_mat[6, i] = 1
+            data_mat[7, i] = 1
+            data_mat[8, i] = 1
+#print(data_mat)
+
+###Simulating parameter
+mu_1=[0]*p
+sigma=.5
+cov_1=np.zeros((p,p))
+
+for i in range(p):
+    cov_1[i,i]=1
+
+cov_1=np.multiply(sigma**2,cov_1)
+
+np.random.seed(10)
+theta=np.random.multivariate_normal(mu_1,cov_1)
+
+#print(theta)
+
+####reponse probabilities
+y_vec=[0]*n_iter_1
+
+def prob_fn(theta,M,x):
+    y=1/(1+math.exp(np.dot(x,theta)-M))
+    return(y)
+
+cutoff_M=.5
+#print(prob_fn(theta,cutoff_M,data_mat[:,1]))
+
+##toeplitz function for preconditioning
+def Toep_fn(rho,p):
+    Toep_mat=np.zeros((p,p))
+    for i in range(p):
+        for j in range(p):
+            Toep_mat[i,j]=rho**(math.fabs(i-j))
+    return Toep_mat
+
+###reponse values######
+random.seed(10)
+np.random.seed(10)
+
+for i in range(n_iter_1):
+    if (random.uniform(0,1)<prob_fn(theta,cutoff_M,data_mat[:,i])):
+        y_vec[i]=1
+    else:
+        y_vec[i]=0
+
+#print(y_vec)
+
+
+##objective function
+def obj_fn(y,X_mat,param,M):
+    first_term=0
+    for i in range(len(y)):
+        first_term=first_term+y[i]*(np.dot(X_mat[:,i],param)-M)
+    second_term=0
+    for i  in range(len(y)):
+        second_term=second_term+math.log(1+math.exp(np.dot(X_mat[:,i],param)-M))
+    third_term=(np.linalg.norm(param)**2)/(2*sigma**2)
+    return (-first_term+second_term+third_term)
+
+
+###derivative objective function
+def der_obj_fn(y,X_mat,param,M):
+    y_comp=[0]*len(y)
+    for i in range(len(y)):
+        y_comp[i]=prob_fn(param,M,X_mat[:,i])-y[i]
+    first_term=np.dot(X_mat,y_comp)
+    second_term=np.dot((1/2*sigma**2),param)
+    return(-first_term+second_term)
+
+x_init=[0]*p #initial point
+
+reps=10**3 #number of replication
+niter=10**4 #number of iterations
+
+gamma=.01 #stepsize
+
+#der_obj_fn(y_vec,data_mat,x_init,cutoff_M)
+
+
+##rho grid#############
+rho_grid=np.linspace(0,.99,20)
+
+##initializing output
+arr_out=np.zeros((p,niter,reps,len(rho_grid)))
+
+##loop##
+for j in range(len(rho_grid)):
+    w,v=np.linalg.eigh(Toep_fn(rho_grid[j],p))
+    Toep_half=np.zeros((p,p))
+    for l in range(p):
+        Toep_half=Toep_half+math.sqrt(w[l])*np.outer(v[l],v[l])
+    for k in range(reps):
+        arr_out[:, 0, k,j] = x_init
+        for i in range(niter-1):
+            error=np.random.normal(0,1,p)
+            arr_out[:, (i + 1), k, j] = arr_out[:, i, k, j] - gamma * np.dot(Toep_fn(rho_grid[j], p),der_obj_fn(y_vec,data_mat,arr_out[:,i,k,j],cutoff_M)) + math.sqrt(2 * gamma) * np.dot(Toep_half, error)
+
+
+##Save_Output
+out_arr_final=asarray(arr_out)
+save('Out_final_1.npy',out_arr_final)
+
+#######################
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+
+os.chdir(r'C:\Users\16128\PycharmProjects\Preconditioned_LMC')
+
+data=np.load('Out_Journey.npy')
+
+#data.shape
+
+
+def plot_preprocess_fn(index1,index2,margin):
+    Temp_mat=data[index1,:,:,index2]
+    vec_out=np.apply_along_axis(np.mean,margin,Temp_mat)
+    return vec_out
+
+
+out_for_plot_0=plot_preprocess_fn(4,0,1)
+out_for_plot_1=plot_preprocess_fn(4,7,1)
+out_for_plot_2=plot_preprocess_fn(4,13,1)
+out_for_plot_3=plot_preprocess_fn(4,19,1)
+
+out_for_plot_0=out_for_plot_0.reshape(-1)
+out_for_plot_1=out_for_plot_1.reshape(-1)
+out_for_plot_2=out_for_plot_2.reshape(-1)
+out_for_plot_3=out_for_plot_3.reshape(-1)
+
+out_for_plot_0=pd.Series(out_for_plot_0, name = "First Coordinate")
+out_for_plot_1=pd.Series(out_for_plot_1, name = "First Coordinate")
+out_for_plot_2=pd.Series(out_for_plot_2, name = "First Coordinate")
+out_for_plot_3=pd.Series(out_for_plot_3, name = "First Coordinate")
+
+bins=np.linspace(-.75,.75,100)
+
+
+
+plt.subplot(1,4,1)
+sns.histplot(data=out_for_plot_0[1000:len(out_for_plot_0)],label=r"$\rho=0$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+
+plt.subplot(1,4,2,sharey=plt.gca())
+sns.histplot(data=out_for_plot_1[1000:len(out_for_plot_1)],label=r"$\rho=.36$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+
+plt.subplot(1,4,3,sharey=plt.gca())
+sns.histplot(data=out_for_plot_2[1000:len(out_for_plot_2)],label=r"$\rho=.68$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+
+plt.subplot(1,4,4,sharey=plt.gca())
+sns.histplot(data=out_for_plot_3[1000:len(out_for_plot_3)],label=r"$\rho=.99$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.ylabel("Probability")
+plt.legend(loc='upper right')
+plt.tight_layout()
+plt.show()
+
+###
+
+out_for_plot_0=plot_preprocess_fn(4,0,0)
+out_for_plot_1=plot_preprocess_fn(4,4,0)
+out_for_plot_2=plot_preprocess_fn(4,7,0)
+out_for_plot_3=plot_preprocess_fn(4,9,0)
+
+out_for_plot_0=out_for_plot_0.reshape(-1)
+out_for_plot_1=out_for_plot_1.reshape(-1)
+out_for_plot_2=out_for_plot_2.reshape(-1)
+out_for_plot_3=out_for_plot_3.reshape(-1)
+
+out_for_plot_0=pd.Series(out_for_plot_0, name = "First Coordinate")
+out_for_plot_1=pd.Series(out_for_plot_1, name = "First Coordinate")
+out_for_plot_2=pd.Series(out_for_plot_2, name = "First Coordinate")
+out_for_plot_3=pd.Series(out_for_plot_3, name = "First Coordinate")
+
+bins=np.linspace(-.75,.75,100)
+
+plt.subplot(1,4,1)
+sns.histplot(data=out_for_plot_0,label=r"$\rho=0$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+
+plt.subplot(1,4,2,sharey=plt.gca())
+sns.histplot(data=out_for_plot_1,label=r"$\rho=.36$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+
+plt.subplot(1,4,3,sharey=plt.gca())
+sns.histplot(data=out_for_plot_2,label=r"$\rho=.68$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+
+plt.subplot(1,4,4,sharey=plt.gca())
+sns.histplot(data=out_for_plot_3,label=r"$\rho=.99$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.ylabel("Probability")
+plt.legend(loc='upper right')
+plt.tight_layout()
+plt.show()
+

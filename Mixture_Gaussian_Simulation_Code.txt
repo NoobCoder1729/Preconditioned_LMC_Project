@@ -1,0 +1,196 @@
+# This is a sample Python script for the output of the Preconditioned LMC code with Toeplitz preconditioning 
+#for mixture Gaussian
+
+import math
+import random
+
+import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib
+
+#######Objecitve function##
+def objective_fn(x,a):
+    y=(np.linalg.norm(np.subtract(x,a))**2)/2 -math.log(1+math.exp(-2*(np.dot(a,x))))
+    return(y)
+
+##Derivative of objective function
+def der_obj_fn(x,a):
+    p=len(x)
+    z=[0]*p
+    for i in range(len(z)):
+        z[i]=(2/(1+math.exp(2*(np.dot(a,x)))))*a[i]
+    y=np.subtract(x,a)+z
+    return(y)
+
+##Toeplitz matrix function####
+def Toep_fn(rho,p):
+    Toep_mat=np.zeros((p,p))
+    for i in range(p):
+        for j in range(p):
+            Toep_mat[i,j]=rho**(math.fabs(i-j))
+    return Toep_mat
+
+####Prec Mat##############
+###Gradient Descent##########
+p=3
+gamma=.01
+niter1=10**2
+mat_out_1=np.zeros((p,niter1))
+x_init=[1]*p
+mat_out_1[:,0]=x_init
+k=1
+d=30
+a=[1/math.sqrt(2*p)]*p
+
+while k<niter1 and d>.001:
+    mat_out_1[:,(k+1)]=np.subtract(mat_out_1[:,k],gamma*der_obj_fn(mat_out_1[:,k],a))
+    d=np.linalg.norm(np.subtract(mat_out_1[:,(k+1)],mat_out_1[:,k]))
+    k=k+1
+
+opt_pt=mat_out_1[:,k]
+
+##rho grid#############
+rho_grid=np.linspace(0,.99,10)
+
+##looping the algorithm
+reps=10**3 # number of replications
+niter=10**4 #number of iterations
+x_init=opt_pt #initial point
+gamma=.01 #stepsize
+
+#initialization
+arr_out=np.zeros((p,reps,niter,len(rho_grid)))
+#loop
+for j in range(len(rho_grid)):
+    w, v = np.linalg.eigh(Toep_fn(rho_grid[j], p))
+    Toep_half = np.zeros((p, p))
+    for l in range(p):
+        Toep_half = Toep_half + math.sqrt(w[l]) * np.outer(v[l], v[l])
+    for k in range(reps):
+        arr_out[:,k,0,j]=x_init
+        for i in range(niter-1):
+            error=np.random.normal(0,1,p)
+            arr_out[:,k,(i+1),j]=arr_out[:,k,i,j] -gamma*np.dot(Toep_fn(rho_grid[j],p),der_obj_fn(arr_out[:,k,i,j],a))+math.sqrt(2*gamma)*np.dot(Toep_half,error)
+
+
+##Save_Output
+out_arr_final=asarray(arr_out)
+save('Out_final_1.npy',out_arr_final)
+
+###########################################
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+
+os.chdir(r'C:\Users\16128\PycharmProjects\Preconditioned_LMC')
+
+data=np.load('Out_final_1.npy')
+
+#data.shape
+
+def plot_preprocess_fn(index1,index2,margin):
+    Temp_mat=data[index1,index2,:,:]
+    vec_out=np.apply_along_axis(np.mean,margin,Temp_mat)
+    return vec_out
+
+out_for_plot_0=plot_preprocess_fn(2,0,1)
+out_for_plot_1=plot_preprocess_fn(2,4,1)
+out_for_plot_2=plot_preprocess_fn(2,7,1)
+out_for_plot_3=plot_preprocess_fn(2,9,1)
+
+out_for_plot_0=out_for_plot_0.reshape(-1)
+out_for_plot_1=out_for_plot_1.reshape(-1)
+out_for_plot_2=out_for_plot_2.reshape(-1)
+out_for_plot_3=out_for_plot_3.reshape(-1)
+
+out_for_plot_0=pd.Series(out_for_plot_0, name = "First Coordinate")
+out_for_plot_1=pd.Series(out_for_plot_1, name = "First Coordinate")
+out_for_plot_2=pd.Series(out_for_plot_2, name = "First Coordinate")
+out_for_plot_3=pd.Series(out_for_plot_3, name = "First Coordinate")
+
+bins=np.linspace(-.75,.75,100)
+
+plt.subplot(1,4,1)
+sns.histplot(data=out_for_plot_0[1000:len(out_for_plot_0)],label=r"$\rho=0$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+plt.subplot(1,4,2,sharey=plt.gca())
+sns.histplot(data=out_for_plot_1[1000:len(out_for_plot_1)],label=r"$\rho=.33$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+plt.subplot(1,4,3,sharey=plt.gca())
+sns.histplot(data=out_for_plot_2[1000:len(out_for_plot_2)],label=r"$\rho=.66$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+plt.subplot(1,4,4,sharey=plt.gca())
+sns.histplot(data=out_for_plot_3[1000:len(out_for_plot_3)],label=r"$\rho=.99$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.ylabel("Probability")
+plt.legend(loc='upper right')
+plt.tight_layout()
+plt.show()
+
+###
+
+out_for_plot_0=plot_preprocess_fn(2,0,0)
+out_for_plot_1=plot_preprocess_fn(2,4,0)
+out_for_plot_2=plot_preprocess_fn(2,7,0)
+out_for_plot_3=plot_preprocess_fn(2,9,0)
+
+out_for_plot_0=out_for_plot_0.reshape(-1)
+out_for_plot_1=out_for_plot_1.reshape(-1)
+out_for_plot_2=out_for_plot_2.reshape(-1)
+out_for_plot_3=out_for_plot_3.reshape(-1)
+
+out_for_plot_0=pd.Series(out_for_plot_0, name = "First Coordinate")
+out_for_plot_1=pd.Series(out_for_plot_1, name = "First Coordinate")
+out_for_plot_2=pd.Series(out_for_plot_2, name = "First Coordinate")
+out_for_plot_3=pd.Series(out_for_plot_3, name = "First Coordinate")
+
+bins=np.linspace(-.75,.75,100)
+
+plt.subplot(1,4,1)
+sns.histplot(data=out_for_plot_0,label=r"$\rho=0$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+
+plt.subplot(1,4,2,sharey=plt.gca())
+sns.histplot(data=out_for_plot_1,label=r"$\rho=.33$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+
+plt.subplot(1,4,3,sharey=plt.gca())
+sns.histplot(data=out_for_plot_2,label=r"$\rho=.66$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.legend(loc='upper right')
+
+
+plt.subplot(1,4,4,sharey=plt.gca())
+sns.histplot(data=out_for_plot_3,label=r"$\rho=.99$",stat='probability',kde=True)
+plt.xlabel("Bins")
+plt.ylabel("Probability")
+plt.legend(loc='upper right')
+plt.tight_layout()
+plt.show()
+###################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
